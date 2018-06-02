@@ -12,19 +12,16 @@
 #include "./tool.hpp"
 
 
-
-
-
-
-
 #define STATUS_MORTGAGE_PAIR_CANNOT_FREEZE 0
 #define STATUS_MORTGAGE_PAIR_CAN_FREEZE 1
 
-#define STATUS_NOT_VOTED 0
-#define STATUS_VOTED 1
+#define STATUS_NOT_VOTED  0
+#define STATUS_VOTED_GOOD 1
+#define STATUS_VOTED_EVIL 2
+#define STATUS_VOTED_ALREADY 3
+
 struct mortgagepair{
     mortgagepair(){
-
     }
 
     mortgagepair(
@@ -99,10 +96,14 @@ struct contractinfo{
     EOSLIB_SERIALIZE( contractinfo, (owner)(scorescnt)(assfrosec));
 };
 
+#define STATUS_BEHAVIOR_EVIL  0
+#define STATUS_BEHAVIOR_GOOD  1
+#define STATUS_BEHAVIOR_UNKNOWN 2
+
 struct behaviorscores{
     uint64_t id;
     account_name server;
-    account_name from;
+    account_name user;
     std::string  memo;
 
     uint64_t    status;
@@ -110,7 +111,7 @@ struct behaviorscores{
     std::string justicememo;
 
     uint64_t primary_key()const { return id;}
-    EOSLIB_SERIALIZE( behaviorscores, (id)(server)(from)(memo)(status)(appealmemo)(justicememo));
+    EOSLIB_SERIALIZE( behaviorscores, (id)(server)(user)(memo)(status)(appealmemo)(justicememo));
 };
 
 
@@ -120,16 +121,17 @@ typedef eosio::multi_index<N(behaviorscores), behaviorscores> BehaviorScores;
 
 
 
-
 class OracleMarket : public eosio::contract{
 
 public:
     OracleMarket( account_name self)
          :contract(self){
         balanceAdmin = currentAdmin;
+        dataAdmin = currentAdmin;
     }
 
     account_name balanceAdmin;
+    account_name dataAdmin;
 
 
     //@abi action
@@ -213,7 +215,7 @@ public:
     //weight=balance(oct)*(now()-lastvotetime)
     //voter account is server account
     //@abi action
-    void vote(account_name voted, account_name voter, int64_t weight){
+    void vote(account_name voted, account_name voter, int64_t weight, uint64_t status){
         require_auth(voter);
 
         ContractInfo userScores(_self, voter);
@@ -222,16 +224,20 @@ public:
 
         Mortgaged mt(_self, voted);
 
-        eosio_assert(mt.find(voted) != mt.end(), CANNOT_VOTE_SOMEONE_NOT_JOIN_OI);
+        eosio_assert(mt.find(voted) != mt.end(), CANNOT_VOTE_SOMEONE_NOT_USE_YOUR_CONTRACT_REGISTERED_ON_MARKET);
 
         auto iteM = mt.get(voted);
 
         for(auto ite = iteM.mortgegelist.begin(); ite != iteM.mortgegelist.end(); ite++){
               mortgagepair obj = *ite;
               if(ite->server == voter && obj.bvoted==STATUS_NOT_VOTED){
-                   obj.bvoted = STATUS_VOTED;
+                   obj.bvoted = status;
 
-                   mt.modify(iteM, voter, [&](auto &s){ });
+                   if(status == STATUS_VOTED_EVIL){
+
+                   }
+
+                   mt.modify(iteM, voter, [&](auto &s){});
 
                    UserScores userScores(_self, voted);
                    auto votedUser = userScores.find(voted);
@@ -245,16 +251,43 @@ public:
                             s.scorescnt = votedUser->scorescnt + weight;
                        });
                    }
-                   break;
+                   return status;
               }
         }
+        return STATUS_VOTED_ALREADY;
     }
 
     //@abi action
-    void evilbehavior(account_name server, account_name from, std::string memo);
+    void evilbehavior(account_name server, account_name user, std::string memo){
+        require_auth(server);
+
+        BehaviorScores bs(_self, dataAdmin);
+        uint64_t idFrom = 0;
+        if(bs.rbegin()!=bs.rend()){
+            idFrom = bs.rbegin()->id+1;
+        }
+
+        eosio_assert(STATUS_VOTED_ALREADY != vote(user, server, evilBehaviorScoresRate, STATUS_VOTED_EVIL), YOU_VOTED_REPEAT);
+
+
+        bs.emplace(server, [&](auto &s){
+            s.id = idFrom;
+            s.server = server;
+            s.user = user;
+            s.memo = memo;
+            s.status = STATUS_VOTED_EVIL;
+            s.appealmemo = "";
+            s.justicememo = "";
+        });
+    }
 
     //@abi action
-    void appealgood(account_name server, uint64_t idevilbeha, std::string memo);
+    void appealgood(account_name user, uint64_t idevilbeha, std::string memo){
+           require_auth(user);
+           BehaviorScores bs(_self, dataAdmin);
+           bs.find(idevilbeha);
+
+    }
 
     //@abi action
     void settogood(account_name admin, uint64_t idevilbeha, std::string memo);
@@ -269,7 +302,7 @@ public:
     const uint64_t normalServerScoresRate = 1;//Provide a normal service and get extra points
     const uint64_t appealAsGoodScoresExtraRate = 1;
 
-    const uint64_t evilBehaviorScoresRate = 10;//Evil offensive score, It is evil to abuse others.
+    const uint64_t evilBehaviorScoresRate = -10;//Evil offensive score, It is evil to abuse others.
 
     const uint64_t minEvilVoteTimeIntervar = 24*60*60;//The minimum time interval for bad votes
     const uint64_t finaltimeSecFrozen = 2*24*60*60;//mortgage freeze time in seconds
