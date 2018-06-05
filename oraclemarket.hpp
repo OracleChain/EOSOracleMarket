@@ -5,7 +5,7 @@
 #include <eosiolib/eosio.hpp>
 #include <eosiolib/db.h>
 #include <eosiolib/asset.hpp>
-#include<eosiolib/serialize.hpp>
+#include <eosiolib/serialize.hpp>
 
 #include "../EOSDACToken/eosdactoken.hpp"
 
@@ -19,6 +19,10 @@
 #define STATUS_VOTED_GOOD 1
 #define STATUS_VOTED_EVIL 2
 #define STATUS_VOTED_ALREADY 3
+#define STATUS_APPEALED 4
+#define STATUS_APPEALED_CHECKED_GOOD 5
+#define STATUS_APPEALED_CHECKED_EVIL 6
+#define STATUS_APPEALED_CHECKED_UNKNOWN 7
 
 struct mortgagepair{
     mortgagepair(){
@@ -52,9 +56,8 @@ struct mortgaged{
     account_name from;
     std::vector<mortgagepair> mortgegelist;
 
-    mortgaged(){
+    mortgaged(){}
 
-    }
     mortgaged(account_name frompar,
     std::vector<mortgagepair> mortgegelistpar){
         this->from = frompar;
@@ -88,12 +91,18 @@ struct scores{
 
 
 struct contractinfo{
-    account_name owner;
-    int64_t scorescnt;
+    int64_t serverindex;
     int64_t assfrosec;//asset frozen seconds
 
-    account_name primary_key()const { return owner;}
-    EOSLIB_SERIALIZE( contractinfo, (owner)(scorescnt)(assfrosec));
+    contractinfo(){}
+
+    contractinfo(int64_t serverindexPar, int64_t assfrosecPar){
+        this->serverindex = serverindexPar;
+        this->assfrosec = assfrosecPar;
+    }
+
+    account_name primary_key()const { return serverindex;}
+    EOSLIB_SERIALIZE( contractinfo, (serverindex)(assfrosec));
 };
 
 #define STATUS_BEHAVIOR_EVIL  0
@@ -111,15 +120,18 @@ struct behaviorscores{
     std::string justicememo;
 
     uint64_t primary_key()const { return id;}
+    account_name get_secondary()const { return server; }
+
     EOSLIB_SERIALIZE( behaviorscores, (id)(server)(user)(memo)(status)(appealmemo)(justicememo));
 };
 
 
 typedef eosio::multi_index<N(userscores), scores> UserScores;
 typedef eosio::multi_index<N(scoreslimit), contractinfo> ContractInfo;//Invoking the contract, the minimum required score,default is zero
-typedef eosio::multi_index<N(behaviorscores), behaviorscores> BehaviorScores;
 
-
+typedef multi_index<N(behsco), behaviorscores,//behaviorscores
+   indexed_by< N(bysecondary), const_mem_fun<behaviorscores, uint64_t, &behaviorscores::get_secondary> >
+> BehaviorScores;
 
 class OracleMarket : public eosio::contract{
 
@@ -135,168 +147,33 @@ public:
 
 
     //@abi action
-    void mortgage(account_name from, account_name server, const asset &quantity){
-        require_auth(from);
-
-        transferfromact tf(from, server, quantity);
-        transferFromInline(tf);
-        Mortgaged mt(_self, from);
-
-        ContractInfo userScores(_self, server);
-        auto serverIte = userScores.find(server);
-        eosio_assert(serverIte != userScores.end(), CONTRACT_NOT_REGISTER_STILL);
-
-
-        if(mt.find(from) == mt.end()){
-
-            std::vector<mortgagepair> mortgegelist;
-            mortgagepair mp(server, quantity, now(), serverIte->assfrosec);
-            mortgegelist.push_back(mp);
-
-            mortgaged m(from, mortgegelist);
-            mt.emplace(from, [&]( auto& s ) {
-                s.from = from;
-                s.mortgegelist = mortgegelist;
-            });
-        }else{
-
-            auto itefrom = mt.get(from);
-            mortgagepair mp(server, quantity, now(), serverIte->assfrosec);
-            itefrom.mortgegelist.push_back(mp);
-            mt.modify(itefrom, from, [&](auto &s){
-            });
-        }
-    }
+    void mortgage(account_name from, account_name server, const asset &quantity);
 
     //@abi action
-    void unfrosse(account_name server, account_name from, const asset & quantity){
-        require_auth(server);
-
-        Mortgaged mt(_self, from);
-        auto mortIte = mt.find(from);
-        eosio_assert(mortIte!=mt.end(), USER_NOT_MORTGAGED_CANNOT_RELEASE);
-
-
-        //find first
-        for(auto ite = mortIte->mortgegelist.begin();ite != mortIte->mortgegelist.end(); ite++){
-              mortgagepair mi = *ite;
-              if(quantity == mi.quantity){
-                  mi.status = STATUS_MORTGAGE_PAIR_CAN_FREEZE;
-                  break;
-              }
-        }
-
-        mt.modify(*mortIte, server, [&](auto & s){
-        });
-    }
+    void unfrosse(account_name server, account_name from, const asset & quantity);
 
     //@abi action
-    void withdrawfro(account_name from){//withdrawfrozened
-        Mortgaged mt(_self, from);
-        eosio_assert(mt.find(from)!=mt.end(), USER_NOT_MORTGAGED_CANNOT_RELEASE);
-
-        auto mortIte = mt.get(from);
-        for(auto ite = mortIte.mortgegelist.begin();ite != mortIte.mortgegelist.end(); ite++){
-              mortgagepair mi = *ite;
-              if(mi.createtime+mi.timesecfrozen<now() || mi.status == STATUS_MORTGAGE_PAIR_CAN_FREEZE){
-                  mortIte.mortgegelist.erase(ite);
-                  transferInline(balanceAdmin, from, mi.quantity, "");
-              }
-        }
-
-        if(mortIte.mortgegelist.size() ==0){
-            mt.erase(mortIte);
-        }else{
-            mt.modify(mortIte, from, [&](auto & s){
-            });
-        }
-    }
+    void withdrawfro(account_name from);
 
     //weight=balance(oct)*(now()-lastvotetime)
     //voter account is server account
     //@abi action
-    void vote(account_name voted, account_name voter, int64_t weight, uint64_t status){
-        require_auth(voter);
+    uint32_t vote(account_name voted, account_name voter, int64_t weight, uint64_t status);
 
-        ContractInfo userScores(_self, voter);
-        auto serverIte = userScores.find(voter);
-        eosio_assert(serverIte != userScores.end(), CONTRACT_NOT_REGISTER_STILL);
-
-        Mortgaged mt(_self, voted);
-
-        eosio_assert(mt.find(voted) != mt.end(), CANNOT_VOTE_SOMEONE_NOT_USE_YOUR_CONTRACT_REGISTERED_ON_MARKET);
-
-        auto iteM = mt.get(voted);
-
-        for(auto ite = iteM.mortgegelist.begin(); ite != iteM.mortgegelist.end(); ite++){
-              mortgagepair obj = *ite;
-              if(ite->server == voter && obj.bvoted==STATUS_NOT_VOTED){
-                   obj.bvoted = status;
-
-                   if(status == STATUS_VOTED_EVIL){
-
-                   }
-
-                   mt.modify(iteM, voter, [&](auto &s){});
-
-                   UserScores userScores(_self, voted);
-                   auto votedUser = userScores.find(voted);
-                   if(votedUser == userScores.end()){
-                       userScores.emplace(voter, [&](auto &s){
-                            s.owner = voted;
-                            s.scorescnt = weight;
-                       });
-                   }else{
-                       userScores.modify(*votedUser, voter, [&](auto &s){
-                            s.scorescnt = votedUser->scorescnt + weight;
-                       });
-                   }
-                   return status;
-              }
-        }
-        return STATUS_VOTED_ALREADY;
-    }
+   uint64_t getEvilCount(account_name name);
 
     //@abi action
-    void evilbehavior(account_name server, account_name user, std::string memo){
-        require_auth(server);
-
-        BehaviorScores bs(_self, dataAdmin);
-        uint64_t idFrom = 0;
-        if(bs.rbegin()!=bs.rend()){
-            idFrom = bs.rbegin()->id+1;
-        }
-
-        eosio_assert(STATUS_VOTED_ALREADY != vote(user, server, evilBehaviorScoresRate, STATUS_VOTED_EVIL), YOU_VOTED_REPEAT);
-
-
-        bs.emplace(server, [&](auto &s){
-            s.id = idFrom;
-            s.server = server;
-            s.user = user;
-            s.memo = memo;
-            s.status = STATUS_VOTED_EVIL;
-            s.appealmemo = "";
-            s.justicememo = "";
-        });
-    }
+    void evilbehavior(account_name server, account_name user, std::string memo);
 
     //@abi action
-    void appealgood(account_name user, uint64_t idevilbeha, std::string memo){
-           require_auth(user);
-           BehaviorScores bs(_self, dataAdmin);
-           bs.find(idevilbeha);
-
-    }
+    void appealgood(account_name user, uint64_t idevilbeha, std::string memo);
 
     //@abi action
-    void settogood(account_name admin, uint64_t idevilbeha, std::string memo);
+    void admincheck(account_name admin, uint64_t idevilbeha, std::string memo, uint8_t status);
+
 
     //@abi action
-    void settoevil(account_name admin, uint64_t idevilbeha, std::string memo);
-
-    //@abi action
-    void setconscolim(account_name conadm, uint64_t scores);//set contract call, minimum scores required
+    void setconscolim(account_name conadm, uint64_t scores);
 
 
     const uint64_t normalServerScoresRate = 1;//Provide a normal service and get extra points
@@ -311,6 +188,6 @@ public:
 OI server need frozen time interface
 */
 
-EOSIO_ABI( OracleMarket, (mortgage)(unfrosse)(withdrawfro)(vote)(evilbehavior)(appealgood)(settogood)(settoevil)(setconscolim))
+EOSIO_ABI( OracleMarket, (mortgage)(unfrosse)(withdrawfro)(evilbehavior)(appealgood)(admincheck)(setconscolim))
 
 
