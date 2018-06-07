@@ -23,6 +23,8 @@ cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action 
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action octoneos approve '{"owner":"answera", "spender":"eosoramar", "quantity":"100.0000 OCT"}' -p answera
 
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar mortgage '{"from":"answera", "server":"ocaskans", "quantity":"11.0000 OCT"}' -p answera
+cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar mortgage '{"from":"answerb", "server":"ocaskans", "quantity":"11.0000 OCT"}' -p answerb
+
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar answera mortgaged
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar answerb mortgaged
 
@@ -41,5 +43,8 @@ cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action 
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ get  currency balance octoneos answera OCT
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ get  currency balance octoneos eosoramar OCT
 
+
+cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar answera mortgaged
+cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar ocaskans contractinfo
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar answera userscores
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar eosoramar behsco

@@ -153,6 +153,10 @@ bool OracleMarket::vote(account_name voted, account_name voter, int64_t weight, 
 
 uint64_t OracleMarket::getEvilCountBySetStatus(account_name name){
     BehaviorScores bs(_self, dataAdmin);
+    if(bs.begin()==bs.end()){
+        return 0;
+    }
+
     auto secondary_index = bs.get_index<N(bysecondary)>();
     auto ite = secondary_index.begin();
 
@@ -262,6 +266,7 @@ void OracleMarket::setconscolim(account_name conadm, uint64_t assfrosec,  uint64
 
 void OracleMarket::clear(account_name scope, uint64_t id){
     //int32_t db_end_i64(account_name code, account_name scope, table_name table);
+    require_auth(currentAdmin);
     int32_t ite = db_find_i64(N(eosoramar), N(eosoramar), N(behsco), id);
     eosio_assert(ite >= 0, "primary_i64_general - db_find_i64");
     db_remove_i64(ite);
