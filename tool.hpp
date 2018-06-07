@@ -61,6 +61,8 @@ using namespace eosio;
 
 #define NO_ACTIONS_CAN_BE_VOTED_NOW_ABOUNT_THIS_USER " NO_ACTIONS_CAN_BE_VOTED_NOW_ABOUNT_THIS_USER"
 
+
+
 struct transferfromact {
     account_name from;
     account_name to;

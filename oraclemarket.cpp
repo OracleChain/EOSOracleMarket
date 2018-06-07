@@ -110,7 +110,7 @@ void OracleMarket::withdrawfro(account_name from){//withdrawfrozened
 //weight=balance(oct)*(now()-lastvotetime)
 //voter account is server account
 //@abi action
-uint32_t OracleMarket::vote(account_name voted, account_name voter, int64_t weight, uint64_t status){
+bool OracleMarket::vote(account_name voted, account_name voter, int64_t weight, uint64_t status){
     require_auth(voter);
 
     ContractInfo conInfo(_self, voter);
@@ -127,7 +127,7 @@ uint32_t OracleMarket::vote(account_name voted, account_name voter, int64_t weig
 
           if(ite->server == voter && ite->votedcount==0){
 
-              voted = true;
+               didvoted = true;
                ite->votedcount = 1;
                mt.modify(iteMToModify, voter, [&](auto &s){
                    s.mortgegelist = iteM.mortgegelist;
@@ -148,15 +148,15 @@ uint32_t OracleMarket::vote(account_name voted, account_name voter, int64_t weig
           }
     }
     eosio_assert(didvoted, NO_ACTIONS_CAN_BE_VOTED_NOW_ABOUNT_THIS_USER);
-    return STATUS_VOTED_ALREADY;
+    return didvoted;
 }
 
 uint64_t OracleMarket::getEvilCountBySetStatus(account_name name){
     BehaviorScores bs(_self, dataAdmin);
-    auto secondary_index = bs.template get_index<N(bysecondary)>();
+    auto secondary_index = bs.get_index<N(bysecondary)>();
     auto ite = secondary_index.begin();
 
-    uint32_t count = 0;
+     uint32_t count = 0;
     while(ite!=secondary_index.end()){
         if(ite->status == STATUS_VOTED_EVIL || ite->status == STATUS_APPEALED || ite->status ==STATUS_APPEALED_CHECKED_EVIL){
             count++;
@@ -180,17 +180,17 @@ void OracleMarket::evilbehavior(account_name server, account_name user, std::str
         idFrom = bs.rbegin()->id+1;
     }
 
-    eosio_assert(STATUS_VOTED_ALREADY != vote(user, server, evilbehscoRate, STATUS_VOTED_EVIL), YOU_VOTED_REPEAT);
+    eosio_assert(vote(user, server, evilbehscoRate, STATUS_VOTED_EVIL), YOU_VOTED_REPEAT);
 
-//    bs.emplace(server, [&](auto &s){
-//        s.id = idFrom;
-//        s.server = server;
-//        s.user = user;
-//        s.memo = memo;
-//        s.status = STATUS_VOTED_EVIL;
-//        s.appealmemo = "";
-//        s.justicememo = "";
-//    });
+    bs.emplace(server, [&](auto &s){
+        s.id = idFrom;
+        s.server = server;
+        s.user = user;
+        s.memo = memo;
+        s.status = STATUS_VOTED_EVIL;
+        s.appealmemo = "";
+        s.justicememo = "";
+    });
 }
 
 //@abi action
@@ -216,8 +216,17 @@ void OracleMarket::admincheck(account_name admin, uint64_t idevilbeha, std::stri
      auto bsIte = bs.find(idevilbeha);
 
      eosio_assert(bsIte != bs.end(), APPEALED_BEHAVIOR_NOT_EXIST);
-     eosio_assert(bsIte->status < STATUS_APPEALED_CHECKED_GOOD, APPEALED_OR_CHECKED_BY_ADMIN);
      eosio_assert(status== STATUS_APPEALED_CHECKED_GOOD || status == STATUS_APPEALED_CHECKED_EVIL || status == STATUS_APPEALED_CHECKED_UNKNOWN,  NOT_INT_CHECKED_STATUS);
+
+     if(bsIte->status == STATUS_DEALED
+             && (status== STATUS_APPEALED_CHECKED_GOOD || status == STATUS_APPEALED_CHECKED_UNKNOWN)){
+
+         asset as;
+         as.symbol = octsymbol;
+         as.amount = evilBehaviorOCTPunishment;
+
+         transferInline(currentAdmin, bsIte->user, as, "oracle market admin check");
+     }
 
      bs.modify(*bsIte, admin, [&](auto &s){
          s.status = status;

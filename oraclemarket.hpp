@@ -163,8 +163,7 @@ public:
 
     //weight=balance(oct)*(now()-lastvotetime)
     //voter account is server account
-    //@abi action
-    uint32_t vote(account_name voted, account_name voter, int64_t weight, uint64_t status);
+    bool vote(account_name voted, account_name voter, int64_t weight, uint64_t status);
 
     uint64_t getEvilCountBySetStatus(account_name name);
 
@@ -192,6 +191,8 @@ public:
 
     const uint64_t minEvilVoteTimeIntervar = 24*60*60;//The minimum time interval for bad votes
     const uint64_t finaltimeSecFrozen = 2*24*60*60;//mortgage freeze time in seconds
+
+    symbol_type octsymbol = (string_to_symbol(4, "OCT"));
 };
 /*
 OI server need frozen time interface
