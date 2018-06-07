@@ -62,29 +62,6 @@ void OracleMarket::unfrosse(account_name server, account_name from, const asset 
     });
 }
 
-#include "./eosiolib/crypto.h"
-checksum256 cal_sha256(int64_t word)
-{
-    checksum256 cs = { 0 };
-    char d[255] = { 0 };
-    snprintf(d, sizeof(d) - 1, "%lld", word);
-    sha256(d, strlen(d), &cs);
-
-    return cs;
-}
-
-string cal_sha256_str(int64_t word)
-{
-    string h;
-    checksum256 cs = cal_sha256(word);
-    for (int i = 0; i < sizeof(cs.hash); ++i) {
-        char hex[3] = { 0 };
-        snprintf(hex, sizeof(hex), "%02x", static_cast<unsigned char>(cs.hash[i]));
-        h += hex;
-    }
-
-    return h;
-}
 
 //@abi action
 void OracleMarket::withdrawfro(account_name from){//withdrawfrozened
@@ -141,34 +118,36 @@ uint32_t OracleMarket::vote(account_name voted, account_name voter, int64_t weig
     eosio_assert(serverIte != conInfo.end(), CONTRACT_NOT_REGISTER_STILL);
 
     Mortgaged mt(_self, voted);
-    eosio_assert(mt.find(voted) != mt.end(), CANNOT_VOTE_SOMEONE_BEFORE_YOUR_CONTRACT_REGISTERED_ON_MARKET);
+    eosio_assert(mt.find(voted) != mt.end(), CANNOT_VOTE_SOMEONE_NOT_JOIN_YOU_SERVER);
 
     auto iteM = mt.get(voted);
-
+    auto iteMToModify = mt.find(voted);
+    bool didvoted = false;
     for(auto ite = iteM.mortgegelist.begin(); ite != iteM.mortgegelist.end(); ite++){
-          mortgagepair obj = *ite;
-          if(ite->server == voter){
-              if(obj.status==STATUS_MORTGAGE_PAIR_CANNOT_FREEZE)
-              {
-                   obj.status = status;
-                   mt.modify(iteM, voter, [&](auto &s){});
 
-                   UserScores userScores(_self, voted);
-                   auto votedUser = userScores.find(voted);
-                   if(votedUser == userScores.end()){
-                       userScores.emplace(voter, [&](auto &s){
-                            s.owner = voted;
-                            s.scorescnt = weight;
-                       });
-                   }else{
-                       userScores.modify(votedUser, voter, [&](auto &s){
-                            s.scorescnt = votedUser->scorescnt + weight;
-                       });
-                   }
-              }
-              return status;
+          if(ite->server == voter && ite->votedcount==0){
+
+              voted = true;
+               ite->votedcount = 1;
+               mt.modify(iteMToModify, voter, [&](auto &s){
+                   s.mortgegelist = iteM.mortgegelist;
+               });
+
+               UserScores userScores(_self, voted);
+               auto votedUser = userScores.find(voted);
+               if(votedUser == userScores.end()){
+                   userScores.emplace(voter, [&](auto &s){
+                        s.owner = voted;
+                        s.scorescnt = weight;
+                   });
+               }else{
+                   userScores.modify(votedUser, voter, [&](auto &s){
+                        s.scorescnt = votedUser->scorescnt + weight;
+                   });
+               }
           }
     }
+    eosio_assert(didvoted, NO_ACTIONS_CAN_BE_VOTED_NOW_ABOUNT_THIS_USER);
     return STATUS_VOTED_ALREADY;
 }
 
@@ -203,15 +182,15 @@ void OracleMarket::evilbehavior(account_name server, account_name user, std::str
 
     eosio_assert(STATUS_VOTED_ALREADY != vote(user, server, evilbehscoRate, STATUS_VOTED_EVIL), YOU_VOTED_REPEAT);
 
-    bs.emplace(server, [&](auto &s){
-        s.id = idFrom;
-        s.server = server;
-        s.user = user;
-        s.memo = memo;
-        s.status = STATUS_VOTED_EVIL;
-        s.appealmemo = "";
-        s.justicememo = "";
-    });
+//    bs.emplace(server, [&](auto &s){
+//        s.id = idFrom;
+//        s.server = server;
+//        s.user = user;
+//        s.memo = memo;
+//        s.status = STATUS_VOTED_EVIL;
+//        s.appealmemo = "";
+//        s.justicememo = "";
+//    });
 }
 
 //@abi action
@@ -274,13 +253,8 @@ void OracleMarket::setconscolim(account_name conadm, uint64_t assfrosec,  uint64
 
 void OracleMarket::clear(account_name scope){
     //int32_t db_end_i64(account_name code, account_name scope, table_name table);
-    int32_t ite = db_find_i64(_self, scope, N(contractinfo), 0);
-    uint64_t prim = 0;
-    int32_t itr_prev = ite;
-    eosio_assert(itr_prev>0, "must > 0");
-    while (itr_prev>0) {
-        itr_prev = db_previous_i64(itr_prev, &prim);
-        db_idx64_remove(itr_prev);
-    }
+    int32_t ite = db_find_i64(N(eosoramar), N(eosoramar), N(behsco), 0);
+    eosio_assert(ite >= 0, "primary_i64_general - db_find_i64");
+    db_remove_i64(ite);
 }
 

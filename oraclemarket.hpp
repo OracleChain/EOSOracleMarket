@@ -128,7 +128,7 @@ struct behsco{
     uint64_t primary_key()const { return id;}
     account_name get_secondary()const { return server; }
 
-    EOSLIB_SERIALIZE( behsco, (id)(server)(user)(memo)(status)(appealmemo)(justicememo));
+    EOSLIB_SERIALIZE( behsco, (id)(server)(memo)(user)(status)(appealmemo)(justicememo));
 };
 
 

@@ -30,6 +30,12 @@ cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action 
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar ocaskans contractinfo
 
 
+cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar evilbehavior '{"server":"ocaskans", "user":"answera", "memo":"askid=1"}' -p ocaskans
+
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar withdrawfro '{"from":"answera"}' -p answera
 
-cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar clear '{"scope":"ocaskans"}' -p ocaskans
+cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar clear '{"scope":"eosoramar"}' -p eosoramar
+
+
+cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar answera userscores
+cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar eosoramar behsco
