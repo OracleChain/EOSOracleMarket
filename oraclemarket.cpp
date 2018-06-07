@@ -229,9 +229,12 @@ void OracleMarket::admincheck(account_name admin, uint64_t idevilbeha, std::stri
      if(bsIte->status == STATUS_DEALED
              && (status== STATUS_APPEALED_CHECKED_GOOD || status == STATUS_APPEALED_CHECKED_UNKNOWN)){
 
+         ContractInfo conInfo(_self, bsIte->server);
+         auto serverIte = conInfo.find(SCORES_INDEX);
+
          asset as;
          as.symbol = octsymbol;
-         as.amount = evilBehaviorOCTPunishment;
+         as.amount = serverIte->fee.amount;
 
          transferInline(currentAdmin, bsIte->user, as, "oracle market admin check");
      }
