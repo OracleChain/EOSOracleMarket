@@ -260,9 +260,9 @@ void OracleMarket::setconscolim(account_name conadm, uint64_t assfrosec,  uint64
     }
 }
 
-void OracleMarket::clear(account_name scope){
+void OracleMarket::clear(account_name scope, uint64_t id){
     //int32_t db_end_i64(account_name code, account_name scope, table_name table);
-    int32_t ite = db_find_i64(N(eosoramar), N(eosoramar), N(behsco), 0);
+    int32_t ite = db_find_i64(N(eosoramar), N(eosoramar), N(behsco), id);
     eosio_assert(ite >= 0, "primary_i64_general - db_find_i64");
     db_remove_i64(ite);
 }

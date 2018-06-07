@@ -34,11 +34,12 @@ cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action 
 
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar withdrawfro '{"from":"answera"}' -p answera
 
-cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar clear '{"scope":"eosoramar"}' -p eosoramar
+cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar clear '{"scope":"eosoramar", "id":"2"}' -p eosoramar
 
 
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar admincheck '{"admin":"eosoramar","idevilbeha":"1","memo":"i checked, i am late", "status":"5"}' -p eosoramar
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ get  currency balance octoneos answera OCT
+cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ get  currency balance octoneos eosoramar OCT
 
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar answera userscores
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar eosoramar behsco

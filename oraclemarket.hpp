@@ -181,7 +181,7 @@ public:
     void setconscolim(account_name conadm, uint64_t assfrosec,  uint64_t scores, asset fee);
 
     //@abi action
-    void clear(account_name scope);
+    void clear(account_name scope, uint64_t id);
 
     const uint64_t normalServerScoresRate = 1;//Provide a normal service and get extra points
     const uint64_t appealAsGoodScoresExtraRate = 1;
