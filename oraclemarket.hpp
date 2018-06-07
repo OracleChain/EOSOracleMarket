@@ -23,6 +23,7 @@
 #define STATUS_APPEALED_CHECKED_GOOD 5
 #define STATUS_APPEALED_CHECKED_EVIL 6
 #define STATUS_APPEALED_CHECKED_UNKNOWN 7
+#define STATUS_DEALED 8
 
 struct mortgagepair{
     mortgagepair(){
@@ -38,7 +39,6 @@ struct mortgagepair{
         this->quantity = quantitypar;
         this->timesecfrozen = timesecfrozenpar;
         this->status = STATUS_MORTGAGE_PAIR_CANNOT_FREEZE;
-        this->bvoted = STATUS_NOT_VOTED;
     }
 
     account_name server;
@@ -46,12 +46,11 @@ struct mortgagepair{
     uint64_t    createtime;
     uint64_t    timesecfrozen;
     uint64_t    status;
-    uint8_t     bvoted;
 
-
-    EOSLIB_SERIALIZE( mortgagepair, (server)(quantity)(createtime)(timesecfrozen)(status)(bvoted))
+    EOSLIB_SERIALIZE( mortgagepair, (server)(quantity)(createtime)(timesecfrozen)(status))
 };
 
+//@abi table mortgaged
 struct mortgaged{
     account_name from;
     std::vector<mortgagepair> mortgegelist;
@@ -74,6 +73,7 @@ typedef eosio::multi_index<N(mortgaged), mortgaged> Mortgaged;
 #define STATUS_BAD_BEHAVIOR 1
 #define STATUS_GOOD_BEHAVIOR 2
 
+//@abi table userscores
 struct scores{
     scores(){}
 
@@ -89,31 +89,38 @@ struct scores{
     EOSLIB_SERIALIZE( scores, (owner)(scorescnt));
 };
 
-
+#define SCORES_INDEX 0
+//@abi table contractinfo
 struct contractinfo{
-    int64_t serverindex;
-    int64_t assfrosec;//asset frozen seconds
+    uint64_t serverindex;
+    uint64_t assfrosec;//asset frozen seconds
+    uint64_t scores;
+    asset fee;
 
     contractinfo(){}
 
-    contractinfo(int64_t serverindexPar, int64_t assfrosecPar){
+    contractinfo(uint64_t serverindexPar, uint64_t assfrosecPar, uint64_t scoresPar, asset feePar){
         this->serverindex = serverindexPar;
         this->assfrosec = assfrosecPar;
+        this->scores = scoresPar;
+        this->fee = feePar;
     }
 
     account_name primary_key()const { return serverindex;}
-    EOSLIB_SERIALIZE( contractinfo, (serverindex)(assfrosec));
+    EOSLIB_SERIALIZE( contractinfo, (serverindex)(assfrosec)(scores)(fee));
 };
 
 #define STATUS_BEHAVIOR_EVIL  0
 #define STATUS_BEHAVIOR_GOOD  1
 #define STATUS_BEHAVIOR_UNKNOWN 2
 
-struct behaviorscores{
+
+//@abi table behsco
+struct behsco{
     uint64_t id;
     account_name server;
-    account_name user;
     std::string  memo;
+    account_name user;
 
     uint64_t    status;
     std::string appealmemo;
@@ -122,15 +129,15 @@ struct behaviorscores{
     uint64_t primary_key()const { return id;}
     account_name get_secondary()const { return server; }
 
-    EOSLIB_SERIALIZE( behaviorscores, (id)(server)(user)(memo)(status)(appealmemo)(justicememo));
+    EOSLIB_SERIALIZE( behsco, (id)(server)(user)(memo)(status)(appealmemo)(justicememo));
 };
 
 
 typedef eosio::multi_index<N(userscores), scores> UserScores;
-typedef eosio::multi_index<N(scoreslimit), contractinfo> ContractInfo;//Invoking the contract, the minimum required score,default is zero
+typedef eosio::multi_index<N(contractinfo), contractinfo> ContractInfo;//Invoking the contract, the minimum required score,default is zero
 
-typedef multi_index<N(behsco), behaviorscores,//behaviorscores
-   indexed_by< N(bysecondary), const_mem_fun<behaviorscores, uint64_t, &behaviorscores::get_secondary> >
+typedef multi_index<N(behsco), behsco,//behsco
+   indexed_by< N(bysecondary), const_mem_fun<behsco, account_name, &behsco::get_secondary> >
 > BehaviorScores;
 
 class OracleMarket : public eosio::contract{
@@ -160,7 +167,7 @@ public:
     //@abi action
     uint32_t vote(account_name voted, account_name voter, int64_t weight, uint64_t status);
 
-   uint64_t getEvilCount(account_name name);
+    uint64_t getEvilCountBySetStatus(account_name name);
 
     //@abi action
     void evilbehavior(account_name server, account_name user, std::string memo);
@@ -173,13 +180,16 @@ public:
 
 
     //@abi action
-    void setconscolim(account_name conadm, uint64_t scores);
+    void setconscolim(account_name conadm, uint64_t assfrosec,  uint64_t scores, asset fee);
 
+    //@abi action
+    void clear(account_name scope);
 
     const uint64_t normalServerScoresRate = 1;//Provide a normal service and get extra points
     const uint64_t appealAsGoodScoresExtraRate = 1;
 
-    const uint64_t evilBehaviorScoresRate = -10;//Evil offensive score, It is evil to abuse others.
+    const uint64_t evilbehscoRate = -10;//Evil offensive score, It is evil to abuse others.
+    const uint64_t evilBehaviorOCTPunishment = 10000;
 
     const uint64_t minEvilVoteTimeIntervar = 24*60*60;//The minimum time interval for bad votes
     const uint64_t finaltimeSecFrozen = 2*24*60*60;//mortgage freeze time in seconds
@@ -188,6 +198,6 @@ public:
 OI server need frozen time interface
 */
 
-EOSIO_ABI( OracleMarket, (mortgage)(unfrosse)(withdrawfro)(evilbehavior)(appealgood)(admincheck)(setconscolim))
+EOSIO_ABI( OracleMarket, (mortgage)(unfrosse)(withdrawfro)(evilbehavior)(appealgood)(admincheck)(setconscolim)(clear))
 
 

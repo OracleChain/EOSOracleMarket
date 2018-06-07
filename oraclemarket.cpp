@@ -8,11 +8,11 @@ using namespace eosio;
 void OracleMarket::mortgage(account_name from, account_name server, const asset &quantity){
     require_auth(from);
 
-    transferfromact tf(from, server, quantity);
+    transferfromact tf(from, currentAdmin, quantity);
     transferFromInline(tf);
 
     ContractInfo userScores(_self, server);
-    auto serverIte = userScores.find(server);
+    auto serverIte = userScores.find(SCORES_INDEX);
     eosio_assert(serverIte != userScores.end(), CONTRACT_NOT_REGISTER_STILL);
 
     Mortgaged mt(_self, from);
@@ -28,13 +28,13 @@ void OracleMarket::mortgage(account_name from, account_name server, const asset 
             s.mortgegelist = mortgegelist;
         });
     }else{
-
-        auto itefrom = mt.get(from);
+        auto itefrom = mt.find(from);
         mortgagepair mp(server, quantity, now(), serverIte->assfrosec);
-        itefrom.mortgegelist.push_back(mp);
         mt.modify(itefrom, from, [&](auto &s){
+            s.mortgegelist.push_back(mp);
         });
     }
+    eosio::print("Mortgage!");
 }
 
 //@abi action
@@ -62,6 +62,30 @@ void OracleMarket::unfrosse(account_name server, account_name from, const asset 
     });
 }
 
+#include "./eosiolib/crypto.h"
+checksum256 cal_sha256(int64_t word)
+{
+    checksum256 cs = { 0 };
+    char d[255] = { 0 };
+    snprintf(d, sizeof(d) - 1, "%lld", word);
+    sha256(d, strlen(d), &cs);
+
+    return cs;
+}
+
+string cal_sha256_str(int64_t word)
+{
+    string h;
+    checksum256 cs = cal_sha256(word);
+    for (int i = 0; i < sizeof(cs.hash); ++i) {
+        char hex[3] = { 0 };
+        snprintf(hex, sizeof(hex), "%02x", static_cast<unsigned char>(cs.hash[i]));
+        h += hex;
+    }
+
+    return h;
+}
+
 //@abi action
 void OracleMarket::withdrawfro(account_name from){//withdrawfrozened
     require_auth(from);
@@ -70,18 +94,33 @@ void OracleMarket::withdrawfro(account_name from){//withdrawfrozened
     eosio_assert(mt.find(from)!=mt.end(), USER_NOT_MORTGAGED_CANNOT_RELEASE);
 
     auto mortIte = mt.get(from);
+
+    uint32_t countEvilNotDealed = getEvilCountBySetStatus(from);
+    int64_t amountPunishMent = evilBehaviorOCTPunishment*countEvilNotDealed;
+
+    asset as;
     for(auto ite = mortIte.mortgegelist.begin();ite != mortIte.mortgegelist.end(); ite++){
-          mortgagepair mi = *ite;
-          if(mi.createtime+mi.timesecfrozen<now() || mi.status == STATUS_MORTGAGE_PAIR_CAN_FREEZE){
-              mortIte.mortgegelist.erase(ite);
-              transferInline(balanceAdmin, from, mi.quantity, "");
+          as = ite->quantity;
+          if(ite->createtime+ite->timesecfrozen<now() || ite->status == STATUS_MORTGAGE_PAIR_CAN_FREEZE){
+               ite = mortIte.mortgegelist.erase(ite);
+               amountPunishMent -= ite->quantity.amount;
+
+               if(ite==mortIte.mortgegelist.end()){
+                    break;
+               }
           }
     }
 
+    eosio_assert(amountPunishMent<0, AMOUNT_CAN_WITHDRAW_LESSTHAN_ZERO);
+    as.amount = (-amountPunishMent);
+    transferInline(balanceAdmin, from, as, "");
+
+    auto toMofify = mt.find(from);
     if(mortIte.mortgegelist.size() ==0 ){
-        mt.erase(mortIte);
+        mt.erase(toMofify);
     }else{
-        mt.modify(mortIte, from, [&](auto & s){
+        mt.modify(toMofify, from, [&](auto & s){
+            s.mortgegelist = mortIte.mortgegelist;
         });
     }
 }
@@ -93,45 +132,59 @@ uint32_t OracleMarket::vote(account_name voted, account_name voter, int64_t weig
     require_auth(voter);
 
     ContractInfo conInfo(_self, voter);
-    auto serverIte = conInfo.find(voter);
+    auto serverIte = conInfo.find(SCORES_INDEX);
     eosio_assert(serverIte != conInfo.end(), CONTRACT_NOT_REGISTER_STILL);
 
     Mortgaged mt(_self, voted);
-    eosio_assert(mt.find(voted) != mt.end(), CANNOT_VOTE_SOMEONE_NOT_USE_YOUR_CONTRACT_REGISTERED_ON_MARKET);
+    eosio_assert(mt.find(voted) != mt.end(), CANNOT_VOTE_SOMEONE_BEFORE_YOUR_CONTRACT_REGISTERED_ON_MARKET);
 
     auto iteM = mt.get(voted);
 
     for(auto ite = iteM.mortgegelist.begin(); ite != iteM.mortgegelist.end(); ite++){
           mortgagepair obj = *ite;
-          if(ite->server == voter && obj.bvoted==STATUS_NOT_VOTED){
-               obj.bvoted = status;
+          if(ite->server == voter){
+              if(obj.status==STATUS_NOT_VOTED)
+              {
+                   obj.status = status;
+                   mt.modify(iteM, voter, [&](auto &s){});
 
-
-               mt.modify(iteM, voter, [&](auto &s){});
-
-               UserScores userScores(_self, voted);
-               auto votedUser = userScores.find(voted);
-               if(votedUser == userScores.end()){
-                   userScores.emplace(voter, [&](auto &s){
-                        s.owner = voted;
-                        s.scorescnt = weight;
-                   });
-               }else{
-                   userScores.modify(*votedUser, voter, [&](auto &s){
-                        s.scorescnt = votedUser->scorescnt + weight;
-                   });
-               }
-               return status;
+                   UserScores userScores(_self, voted);
+                   auto votedUser = userScores.find(voted);
+                   if(votedUser == userScores.end()){
+                       userScores.emplace(voter, [&](auto &s){
+                            s.owner = voted;
+                            s.scorescnt = weight;
+                       });
+                   }else{
+                       userScores.modify(*votedUser, voter, [&](auto &s){
+                            s.scorescnt = votedUser->scorescnt + weight;
+                       });
+                   }
+              }
+              return status;
           }
     }
     return STATUS_VOTED_ALREADY;
 }
 
-uint64_t OracleMarket::getEvilCount(account_name name){
+uint64_t OracleMarket::getEvilCountBySetStatus(account_name name){
     BehaviorScores bs(_self, dataAdmin);
     auto secondary_index = bs.template get_index<N(bysecondary)>();
+    auto ite = secondary_index.begin();
 
+    uint32_t count = 0;
+    while(ite!=secondary_index.end()){
+        if(ite->status == STATUS_VOTED_EVIL || ite->status == STATUS_APPEALED || ite->status ==STATUS_APPEALED_CHECKED_EVIL){
+            count++;
 
+            bs.modify(*ite, 0, [&](auto &s){
+                s.status = STATUS_DEALED;
+            });
+        }
+        ite++;
+    }
+
+    return count;
 }
 //@abi action
 void OracleMarket::evilbehavior(account_name server, account_name user, std::string memo){
@@ -143,7 +196,7 @@ void OracleMarket::evilbehavior(account_name server, account_name user, std::str
         idFrom = bs.rbegin()->id+1;
     }
 
-    eosio_assert(STATUS_VOTED_ALREADY != vote(user, server, evilBehaviorScoresRate, STATUS_VOTED_EVIL), YOU_VOTED_REPEAT);
+    eosio_assert(STATUS_VOTED_ALREADY != vote(user, server, evilbehscoRate, STATUS_VOTED_EVIL), YOU_VOTED_REPEAT);
 
     bs.emplace(server, [&](auto &s){
         s.id = idFrom;
@@ -190,17 +243,39 @@ void OracleMarket::admincheck(account_name admin, uint64_t idevilbeha, std::stri
 
 
 //@abi action
-void OracleMarket::setconscolim(account_name conadm, uint64_t scores){//set contract call, minimum scores required
+void OracleMarket::setconscolim(account_name conadm, uint64_t assfrosec,  uint64_t scores, asset fee){//set contract call, minimum scores required
+    require_auth(conadm);
+
     ContractInfo conInfo(_self, conadm);
-    auto ciItem = conInfo.find(conadm);
+    eosio_assert(fee.amount>=0, ASSFROSEC_SCORES_FEE);
+
+    auto ciItem = conInfo.find(SCORES_INDEX);
     if(ciItem != conInfo.end()){
         conInfo.modify(ciItem, conadm, [&](auto &s){
+            s.assfrosec = assfrosec;
+            s.serverindex = 0;
+            s.scores = scores;
+            s.fee = fee;
         });
     }else{
         conInfo.emplace(conadm, [&](auto &s){
-           s.assfrosec = scores;
+           s.assfrosec = assfrosec;
            s.serverindex = 0;
+           s.scores = scores;
+           s.fee = fee;
         });
+    }
+}
+
+void OracleMarket::clear(account_name scope){
+    //int32_t db_end_i64(account_name code, account_name scope, table_name table);
+    int32_t ite = db_find_i64(_self, scope, N(contractinfo), 0);
+    uint64_t prim = 0;
+    int32_t itr_prev = ite;
+    eosio_assert(itr_prev>0, "must > 0");
+    while (itr_prev>0) {
+        itr_prev = db_previous_i64(itr_prev, &prim);
+        db_idx64_remove(itr_prev);
     }
 }
 

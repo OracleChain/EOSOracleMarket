@@ -47,13 +47,17 @@ using namespace eosio;
 #define CONTRACT_NOT_REGISTER_STILL " CONTRACT_NOT_REGISTER_STILL"
 #define USER_NOT_MORTGAGED_CANNOT_RELEASE " USER_NOT_MORTGAGED_CANNOT_RELEASE"
 #define PERMISSION_NOT_SANTISFY " PERMISSION_NOT_SANTISFY"
-#define CANNOT_VOTE_SOMEONE_NOT_USE_YOUR_CONTRACT_REGISTERED_ON_MARKET " CANNOT_VOTE_SOMEONE_NOT_JOIN_OI"
+#define CANNOT_VOTE_SOMEONE_BEFORE_YOUR_CONTRACT_REGISTERED_ON_MARKET " CANNOT_VOTE_SOMEONE_NOT_JOIN_OI"
 #define YOU_VOTED_REPEAT " YOU_VOTED_REPEAT"
 
 #define APPEALED_BEHAVIOR_NOT_EXIST " YOU_VOTED_REPEAT"
 #define APPEALED_OR_CHECKED_BY_ADMIN " APPEALED_OR_CHECKED_BY_ADMIN"
 
 #define NOT_INT_CHECKED_STATUS " NOT_INT_CHECKED_STATUS"
+
+#define AMOUNT_CAN_WITHDRAW_LESSTHAN_ZERO " AMOUNT_CAN_WITHDRAW_LESSTHAN_ZERO"
+#define BAD_ERROR_MORTGAGE_DATA_NOT_EXIST " BAD_ERROR_MORTGAGE_DATA_NOT_EXIST"
+#define ASSFROSEC_SCORES_FEE " ASSFROSEC_SCORES_FEE>=0"
 
 struct transferfromact {
     account_name from;
@@ -83,7 +87,7 @@ struct transfer
 };
 
 
-account_name currentAdmin = N(oraclemarket);
+account_name currentAdmin = N(eosoramar);
 
 void transferInline(
     account_name from,
@@ -91,14 +95,13 @@ void transferInline(
     eosio::asset      quantity,
     std::string       memo)
 {
-    require_auth(from);
     INLINE_ACTION_SENDER(eosdactoken, transfer)(tokenContract, {from,N(active)},
     { from, to, quantity, memo } );
 }
 
 
 void transferFromInline(const transferfromact &tf){
-    require_auth(tf.from);
+    //require_auth(tf.to);
 
     eosio::asset fromBalance = eosdactoken(tokenContract).get_balance(tf.from, tf.quantity.symbol.name());
     eosio_assert(fromBalance.amount >= tf.quantity.amount,NOT_ENOUGH_OCT_TO_DO_IT);
