@@ -72,11 +72,9 @@ void OracleMarket::withdrawfro(account_name from){//withdrawfrozened
 
     auto mortIte = mt.get(from);
 
-    uint32_t countEvilNotDealed = getEvilCountBySetStatus(from);
-    int64_t amountPunishMent = evilBehaviorOCTPunishment*countEvilNotDealed;
+    int32_t toPunishMent = getPunishMentAmount(from);
 
     asset as;
-
     for(auto ite = mortIte.mortgegelist.begin();ite != mortIte.mortgegelist.end(); ite++){
           as = ite->quantity;
 
@@ -85,7 +83,7 @@ void OracleMarket::withdrawfro(account_name from){//withdrawfrozened
 
           if(ite->createtime+serverIte->assfrosec<now() || ite->status == STATUS_MORTGAGE_PAIR_CAN_FREEZE){
                ite = mortIte.mortgegelist.erase(ite);
-               amountPunishMent -= ite->quantity.amount;
+               toPunishMent -=ite->quantity.amount;
 
                if(ite==mortIte.mortgegelist.end()){
                     break;
@@ -93,8 +91,8 @@ void OracleMarket::withdrawfro(account_name from){//withdrawfrozened
           }
     }
 
-    eosio_assert(amountPunishMent<0, AMOUNT_CAN_WITHDRAW_NOW_IS_ZERO);
-    as.amount = (-amountPunishMent);
+    eosio_assert(toPunishMent<0, AMOUNT_CAN_WITHDRAW_NOW_IS_ZERO);
+    as.amount = (-toPunishMent);
     transferInline(balanceAdmin, from, as, "");
 
     auto toMofify = mt.find(from);
@@ -151,7 +149,7 @@ bool OracleMarket::vote(account_name voted, account_name voter, int64_t weight, 
     return didvoted;
 }
 
-uint64_t OracleMarket::getEvilCountBySetStatus(account_name name){
+uint64_t OracleMarket::getPunishMentAmount(account_name name){
     BehaviorScores bs(_self, dataAdmin);
     if(bs.begin()==bs.end()){
         return 0;
@@ -160,10 +158,13 @@ uint64_t OracleMarket::getEvilCountBySetStatus(account_name name){
     auto secondary_index = bs.get_index<N(bysecondary)>();
     auto ite = secondary_index.begin();
 
-     uint32_t count = 0;
+    uint32_t countToPunishMent = 0;
     while(ite!=secondary_index.end()){
         if(ite->status == STATUS_VOTED_EVIL || ite->status == STATUS_APPEALED || ite->status ==STATUS_APPEALED_CHECKED_EVIL){
-            count++;
+
+            ContractInfo conInfo(_self, ite->server);
+            auto serverIte = conInfo.find(SCORES_INDEX);
+            countToPunishMent += serverIte->fee.amount;
 
             bs.modify(*ite, 0, [&](auto &s){
                 s.status = STATUS_DEALED;
@@ -172,11 +173,13 @@ uint64_t OracleMarket::getEvilCountBySetStatus(account_name name){
         ite++;
     }
 
-    return count;
+    return countToPunishMent;
 }
 //@abi action
-void OracleMarket::evilbehavior(account_name server, account_name user, std::string memo){
+void OracleMarket::votebehavior(account_name server, account_name user, uint64_t status, std::string memo){
     require_auth(server);
+
+    eosio_assert(status==STATUS_VOTED_EVIL||status==STATUS_VOTED_GOOD, ONLY_CAN_VOTED_AD_GOOD_OR_EVIL);
 
     BehaviorScores bs(_self, dataAdmin);
     uint64_t idFrom = 0;
@@ -184,14 +187,15 @@ void OracleMarket::evilbehavior(account_name server, account_name user, std::str
         idFrom = bs.rbegin()->id+1;
     }
 
-    eosio_assert(vote(user, server, evilbehscoRate, STATUS_VOTED_EVIL), YOU_VOTED_REPEAT);
+    int64_t weight = status==STATUS_VOTED_EVIL?evilbehscoRate:-evilbehscoRate;
+    eosio_assert(vote(user, server, weight, status), YOU_VOTED_REPEAT);
 
     bs.emplace(server, [&](auto &s){
         s.id = idFrom;
         s.server = server;
         s.user = user;
         s.memo = memo;
-        s.status = STATUS_VOTED_EVIL;
+        s.status = status;
         s.appealmemo = "";
         s.justicememo = "";
     });

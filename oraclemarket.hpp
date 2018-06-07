@@ -165,10 +165,10 @@ public:
     //voter account is server account
     bool vote(account_name voted, account_name voter, int64_t weight, uint64_t status);
 
-    uint64_t getEvilCountBySetStatus(account_name name);
+    uint64_t getPunishMentAmount(account_name name);
 
     //@abi action
-    void evilbehavior(account_name server, account_name user, std::string memo);
+    void votebehavior(account_name server, account_name user, uint64_t status, std::string memo);
 
     //@abi action
     void appealgood(account_name user, uint64_t idevilbeha, std::string memo);
@@ -198,6 +198,6 @@ public:
 OI server need frozen time interface
 */
 
-EOSIO_ABI( OracleMarket, (mortgage)(unfrosse)(withdrawfro)(evilbehavior)(appealgood)(admincheck)(setconscolim)(clear))
+EOSIO_ABI( OracleMarket, (mortgage)(unfrosse)(withdrawfro)(votebehavior)(appealgood)(admincheck)(setconscolim)(clear))
 
 
