@@ -26,7 +26,7 @@ cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action 
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar answera mortgaged
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar answerb mortgaged
 
-cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar setconscolim '{"conadm":"ocaskans", "assfrosec":"2000", "scores":"0", "fee":"1.0000 OCT"}' -p ocaskans
+cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/ push action eosoramar setconscolim '{"conadm":"ocaskans", "assfrosec":"20", "scores":"0", "fee":"1.0000 OCT"}' -p ocaskans
 cleos -u http://127.0.0.1:8888/ --wallet-url http://127.0.0.1:8890/  get table eosoramar ocaskans contractinfo
 
 

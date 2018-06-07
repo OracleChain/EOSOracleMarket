@@ -32,22 +32,21 @@ struct mortgagepair{
     mortgagepair(
     account_name serverpar,
     asset       quantitypar,
-    uint64_t     createtimepar,
-    uint64_t     timesecfrozenpar){
+    uint64_t     createtimepar){
         this->createtime = createtimepar;
         this->server = serverpar;
         this->quantity = quantitypar;
-        this->timesecfrozen = timesecfrozenpar;
         this->status = STATUS_MORTGAGE_PAIR_CANNOT_FREEZE;
+        this->votedcount = 0;
     }
 
     account_name server;
     asset       quantity;
     uint64_t    createtime;
-    uint64_t    timesecfrozen;
     uint64_t    status;
+    uint64_t    votedcount;
 
-    EOSLIB_SERIALIZE( mortgagepair, (server)(quantity)(createtime)(timesecfrozen)(status))
+    EOSLIB_SERIALIZE( mortgagepair, (server)(quantity)(createtime)(status)(votedcount))
 };
 
 //@abi table mortgaged
@@ -90,7 +89,7 @@ struct scores{
 };
 
 #define SCORES_INDEX 0
-//@abi table contractinfo
+//@abi table contractinfo i64
 struct contractinfo{
     uint64_t serverindex;
     uint64_t assfrosec;//asset frozen seconds

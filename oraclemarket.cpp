@@ -19,7 +19,7 @@ void OracleMarket::mortgage(account_name from, account_name server, const asset 
     if(mt.find(from) == mt.end()){
 
         std::vector<mortgagepair> mortgegelist;
-        mortgagepair mp(server, quantity, now(), serverIte->assfrosec);
+        mortgagepair mp(server, quantity, now());
         mortgegelist.push_back(mp);
 
         mortgaged m(from, mortgegelist);
@@ -29,12 +29,12 @@ void OracleMarket::mortgage(account_name from, account_name server, const asset 
         });
     }else{
         auto itefrom = mt.find(from);
-        mortgagepair mp(server, quantity, now(), serverIte->assfrosec);
+        mortgagepair mp(server, quantity, now());
         mt.modify(itefrom, from, [&](auto &s){
             s.mortgegelist.push_back(mp);
         });
     }
-    eosio::print("Mortgage!");
+    eosio::print("mortgage!");
 }
 
 //@abi action
@@ -99,9 +99,14 @@ void OracleMarket::withdrawfro(account_name from){//withdrawfrozened
     int64_t amountPunishMent = evilBehaviorOCTPunishment*countEvilNotDealed;
 
     asset as;
+
     for(auto ite = mortIte.mortgegelist.begin();ite != mortIte.mortgegelist.end(); ite++){
           as = ite->quantity;
-          if(ite->createtime+ite->timesecfrozen<now() || ite->status == STATUS_MORTGAGE_PAIR_CAN_FREEZE){
+
+          ContractInfo conInfo(_self, ite->server);
+          auto serverIte = conInfo.find(SCORES_INDEX);
+
+          if(ite->createtime+serverIte->assfrosec<now() || ite->status == STATUS_MORTGAGE_PAIR_CAN_FREEZE){
                ite = mortIte.mortgegelist.erase(ite);
                amountPunishMent -= ite->quantity.amount;
 
@@ -111,7 +116,7 @@ void OracleMarket::withdrawfro(account_name from){//withdrawfrozened
           }
     }
 
-    eosio_assert(amountPunishMent<0, AMOUNT_CAN_WITHDRAW_LESSTHAN_ZERO);
+    eosio_assert(amountPunishMent<0, AMOUNT_CAN_WITHDRAW_NOW_IS_ZERO);
     as.amount = (-amountPunishMent);
     transferInline(balanceAdmin, from, as, "");
 
@@ -143,7 +148,7 @@ uint32_t OracleMarket::vote(account_name voted, account_name voter, int64_t weig
     for(auto ite = iteM.mortgegelist.begin(); ite != iteM.mortgegelist.end(); ite++){
           mortgagepair obj = *ite;
           if(ite->server == voter){
-              if(obj.status==STATUS_NOT_VOTED)
+              if(obj.status==STATUS_MORTGAGE_PAIR_CANNOT_FREEZE)
               {
                    obj.status = status;
                    mt.modify(iteM, voter, [&](auto &s){});
@@ -156,7 +161,7 @@ uint32_t OracleMarket::vote(account_name voted, account_name voter, int64_t weig
                             s.scorescnt = weight;
                        });
                    }else{
-                       userScores.modify(*votedUser, voter, [&](auto &s){
+                       userScores.modify(votedUser, voter, [&](auto &s){
                             s.scorescnt = votedUser->scorescnt + weight;
                        });
                    }
